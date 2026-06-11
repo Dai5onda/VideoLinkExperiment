@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MeshLab</title>
+<style>
+  :root { --bg:#14171c; --card:#1d2129; --line:#2c323d; --txt:#e6e9ee;
+          --mut:#8b93a1; --acc:#4da3ff; --ok:#3fcf76; --bad:#ff5b5b;
+          --warn:#ffb347; }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--txt); overflow:hidden;
+         font:13px/1.45 -apple-system,"Segoe UI",Roboto,sans-serif;
+         display:flex; flex-direction:column; }
+  header { display:flex; gap:14px; align-items:center; padding:6px 14px;
+           border-bottom:1px solid var(--line); flex:0 0 auto; }
+  header h1 { font-size:15px; margin:0; font-weight:700; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%;
+         margin-right:4px; background:var(--bad); }
+  .dot.on { background:var(--ok); }
+  .pill { color:var(--mut); font-size:12px; white-space:nowrap; }
+  #runBadge { color:var(--acc); font-weight:600; }
+  main { flex:1 1 auto; display:grid; min-height:0;
+         grid-template-columns: 330px 1fr; gap:10px; padding:10px; }
+  /* left: controls (scrolls internally if needed) */
+  #controls { overflow-y:auto; min-height:0; padding-right:2px; }
+  .card { background:var(--card); border:1px solid var(--line);
+          border-radius:9px; padding:10px 12px; margin-bottom:10px; }
+  .card h2 { font-size:11.5px; margin:0 0 8px; color:var(--mut);
+             text-transform:uppercase; letter-spacing:.06em; }
+  details { border-top:1px solid var(--line); padding:6px 0 2px; }
+  details summary { cursor:pointer; color:var(--mut); font-size:12px;
+                    font-weight:600; user-select:none; }
+  label.row { display:block; margin:7px 0 1px; font-size:12.5px; }
+  .hint { color:var(--mut); font-size:10.5px; margin:0 0 3px; }
+  select, input[type=number] { background:#11141a; color:var(--txt);
+      border:1px solid var(--line); border-radius:5px; padding:4px 7px;
+      width:100%; font-size:12.5px; }
+  .range-wrap { display:flex; gap:8px; align-items:center; }
+  .range-wrap input[type=range]{ flex:1; accent-color:var(--acc); }
+  .range-wrap input[type=number]{ width:76px; }
+  .check { display:flex; gap:7px; align-items:center; margin:7px 0; }
+  button { background:var(--acc); border:0; color:#08111e; font-weight:700;
+           border-radius:6px; padding:8px 14px; cursor:pointer; font-size:13px; }
+  button.stop { background:var(--bad); color:#fff; }
+  button.ghost { background:transparent; color:var(--acc);
+                 border:1px solid var(--acc); font-weight:600; }
+  .btnrow { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .status { margin-top:8px; font-size:12px; color:var(--mut);
+            white-space:pre-wrap; }
+  .status.err { color:var(--bad); }
+  code.cmd { display:block; background:#10131a; border:1px solid var(--line);
+       border-radius:5px; padding:6px; font-size:10px; color:#9fd0ff;
+       margin-top:6px; word-break:break-all; max-height:64px; overflow:auto;}
+  /* right: monitor */
+  #monitor { display:grid; min-height:0; gap:10px;
+             grid-template-rows: 92px 1fr 150px; }
+  #tiles { display:grid; grid-template-columns: repeat(6, 1fr); gap:10px; }
+  .tile { background:var(--card); border:1px solid var(--line);
+          border-radius:9px; padding:8px 12px; display:flex;
+          flex-direction:column; justify-content:center; }
+  .tile .v { font-size:26px; font-weight:800; line-height:1.1;
+             font-variant-numeric:tabular-nums; }
+  .tile .l { font-size:11px; color:var(--mut); text-transform:uppercase;
+             letter-spacing:.05em; }
+  .tile .s { font-size:10.5px; color:var(--mut); }
+  .tile.ok  .v { color:var(--ok); }
+  .tile.warn .v { color:var(--warn); }
+  .tile.bad .v { color:var(--bad); }
+  .tile.bad { border-color:var(--bad); }
+  #charts { display:grid; grid-template-columns:1fr 1fr;
+            grid-template-rows:1fr 1fr; gap:10px; min-height:0; }
+  .chartcard { background:var(--card); border:1px solid var(--line);
+               border-radius:9px; padding:6px 10px 8px; display:flex;
+               flex-direction:column; min-height:0; }
+  .chartcard h2 { font-size:11px; margin:0 0 4px; color:var(--mut);
+                  text-transform:uppercase; letter-spacing:.05em;
+                  display:flex; justify-content:space-between; }
+  .chartcard h2 .leg { text-transform:none; letter-spacing:0; }
+  canvas { width:100%; flex:1 1 auto; min-height:0; }
+  /* scoreboard */
+  #scorewrap { background:var(--card); border:1px solid var(--line);
+               border-radius:9px; padding:6px 10px; overflow-y:auto;
+               min-height:0; }
+  table { width:100%; border-collapse:collapse; font-size:11.5px; }
+  td, th { padding:2.5px 7px; border-bottom:1px solid var(--line);
+           text-align:right; white-space:nowrap; }
+  td:first-child, th:first-child, td.l, th.l { text-align:left; }
+  th { color:var(--mut); font-weight:600; position:sticky; top:0;
+       background:var(--card); }
+  td.good { color:var(--ok); } td.mid { color:var(--warn); }
+  td.poor { color:var(--bad); font-weight:700; }
+  a { color:var(--acc); text-decoration:none; }
+  @media (max-width:1100px){ body{ overflow:auto; }
+    main{ grid-template-columns:1fr; } #tiles{ grid-template-columns:repeat(3,1fr); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>MeshLab</h1>
+  <span class="pill" id="whoami">…</span>
+  <span class="pill"><span class="dot" id="dotRadio"></span>radio</span>
+  <span class="pill"><span class="dot" id="dotPeer"></span>peer <span id="peerName"></span></span>
+  <span class="pill"><span class="dot" id="dotPipe"></span>pipeline</span>
+  <span class="pill" id="runBadge"></span>
+  <span class="pill" id="runClock"></span>
+</header>
+
+<main>
+<div id="controls">
+  <div class="card">
+    <h2>Run</h2>
+    <label class="row">Direction</label>
+    <select id="direction"></select>
+    <label class="row">Transport</label>
+    <select id="transport"></select>
+    <p class="hint" id="transportDesc"></p>
+    <label class="row">Preset</label>
+    <div class="range-wrap">
+      <select id="preset"><option value="">— none —</option></select>
+      <button class="ghost" id="applyPreset" style="padding:4px 9px">Apply</button>
+    </div>
+    <div class="btnrow">
+      <button id="startRun">Start run</button>
+      <button class="stop" id="stopRun">Stop</button>
+    </div>
+    <div class="status" id="runStatus"></div>
+    <code class="cmd" id="lastCmd" style="display:none"></code>
+  </div>
+
+  <div class="card">
+    <details open><summary>Video (encode)</summary><div id="videoParams"></div></details>
+    <details><summary>Sender transport settings</summary><div id="senderParams"></div></details>
+    <details><summary>Receiver transport settings</summary><div id="receiverParams"></div></details>
+    <details><summary>Manual / advanced</summary>
+      <p class="hint">Start only this agent's half of a pipeline.</p>
+      <div class="btnrow">
+        <button class="ghost" id="localSender">Sender</button>
+        <button class="ghost" id="localReceiver">Receiver</button>
+        <button class="ghost" id="localStop">Stop</button>
+      </div>
+    </details>
+  </div>
+</div>
+
+<div id="monitor">
+  <div id="tiles">
+    <div class="tile" id="tDeliv"><div class="v">—</div><div class="l">Delivery</div><div class="s">frames arriving vs target</div></div>
+    <div class="tile" id="tFreeze"><div class="v">—</div><div class="l">Freeze</div><div class="s">since last new frame</div></div>
+    <div class="tile" id="tSnr"><div class="v">—</div><div class="l">SNR worst dir</div><div class="s">link budget headroom</div></div>
+    <div class="tile" id="tUtil"><div class="v">—</div><div class="l">Air utilization</div><div class="s">radio resourceRatio</div></div>
+    <div class="tile" id="tFeed"><div class="v">—</div><div class="l">Feed rate</div><div class="s">eth→air measured</div></div>
+    <div class="tile" id="tOvf"><div class="v">—</div><div class="l">TX overflow</div><div class="s">feed &gt; pipe alarm</div></div>
+  </div>
+
+  <div id="charts">
+    <div class="chartcard"><h2>Delivery % — is the video still readable?
+      <span class="leg" id="legDeliv"></span></h2><canvas id="chDeliv"></canvas></div>
+    <div class="chartcard"><h2>Link SNR (dB)
+      <span class="leg" id="legSnr"></span></h2><canvas id="chSnr"></canvas></div>
+    <div class="chartcard"><h2>Loss &amp; recovery (events /s)
+      <span class="leg" id="legLoss"></span></h2><canvas id="chLoss"></canvas></div>
+    <div class="chartcard"><h2>Band noise floor (dBm) — lower is cleaner
+      <span class="leg" id="legNoise"></span></h2><canvas id="chNoise"></canvas></div>
+  </div>
+
+  <div id="scorewrap">
+    <table id="runsTable"></table>
+  </div>
+</div>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let INFO = null, SCHEMA = null, RUN = null;
+const state = { video:{}, sender:{}, receiver:{} };
+
+/* ---------------- schema-driven controls ---------------- */
+function control(group, key, spec){
+  const wrap = document.createElement("div");
+  const lab = document.createElement("label");
+  lab.className="row"; lab.textContent=spec.label; wrap.appendChild(lab);
+  if (spec.help){ const p=document.createElement("p"); p.className="hint";
+    p.textContent=spec.help; wrap.appendChild(p); }
+  const set = v => { state[group][key]=v; };
+  if (spec.type==="int"){
+    const rw=document.createElement("div"); rw.className="range-wrap";
+    const r=document.createElement("input"); r.type="range";
+    r.min=spec.min; r.max=spec.max; r.step=spec.step||1; r.value=spec.default;
+    const n=document.createElement("input"); n.type="number";
+    n.min=spec.min; n.max=spec.max; n.step=spec.step||1; n.value=spec.default;
+    r.oninput=()=>{ n.value=r.value; set(+r.value); };
+    n.oninput=()=>{ r.value=n.value; set(+n.value); };
+    rw.appendChild(r); rw.appendChild(n); wrap.appendChild(rw);
+    set(spec.default); wrap._apply=v=>{ r.value=v; n.value=v; set(+v); };
+  } else if (spec.type==="enum"){
+    const s=document.createElement("select");
+    spec.options.forEach(o=>{ const e=document.createElement("option");
+      e.value=o; e.textContent=o; s.appendChild(e); });
+    s.value=spec.default; s.onchange=()=>set(s.value);
+    wrap.appendChild(s); set(spec.default);
+    wrap._apply=v=>{ s.value=v; set(v); };
+  } else {
+    const d=document.createElement("div"); d.className="check";
+    const c=document.createElement("input"); c.type="checkbox";
+    c.checked=!!spec.default; c.onchange=()=>set(c.checked);
+    d.appendChild(c); wrap.appendChild(d); set(!!spec.default);
+    wrap._apply=v=>{ c.checked=!!v; set(!!v); };
+  }
+  wrap._key=key; return wrap;
+}
+function renderGroup(elId, group, specs){
+  const host=$(elId); host.innerHTML=""; state[group]={};
+  Object.entries(specs).forEach(([k,s])=>host.appendChild(control(group,k,s)));
+}
+function renderTransport(){
+  const t=$("transport").value, tr=SCHEMA.transports[t];
+  $("transportDesc").textContent=tr.desc;
+  renderGroup("senderParams","sender",tr.sender);
+  renderGroup("receiverParams","receiver",tr.receiver);
+}
+function applyPreset(){
+  const name=$("preset").value; if(!name) return;
+  const p=SCHEMA.presets[name];
+  $("transport").value=p.transport; renderTransport();
+  const apply=(elId,vals)=>{ if(!vals) return;
+    [...$(elId).children].forEach(w=>{
+      if(w._key!==undefined && vals[w._key]!==undefined) w._apply(vals[w._key]); }); };
+  apply("videoParams",p.video); apply("senderParams",p.sender);
+  apply("receiverParams",p.receiver);
+  setStatus("preset '"+name+"': "+p.desc);
+}
+
+/* ---------------- api ---------------- */
+async function api(path, body){
+  const opt = body ? {method:"POST", body:JSON.stringify(body),
+    headers:{"Content-Type":"application/json"}} : {};
+  const r = await fetch(path, opt); const j = await r.json();
+  if(!r.ok) throw new Error(j.error||r.status);
+  return j;
+}
+const payload = () => ({ transport:$("transport").value, video:state.video,
+                         sender:state.sender, receiver:state.receiver });
+function setStatus(m, err){ const el=$("runStatus");
+  el.textContent=m; el.className="status"+(err?" err":""); }
+
+$("startRun").onclick = async ()=>{
+  try{ const b=payload(); b.direction=$("direction").value;
+    setStatus("starting…"); await api("/api/run/start", b);
+    setStatus("run live: "+b.direction+" via "+b.transport);
+  }catch(e){ setStatus("start failed: "+e.message, true); } };
+$("stopRun").onclick = async ()=>{
+  try{ await api("/api/run/stop",{}); setStatus("stopped — summary saved."); }
+  catch(e){ setStatus(e.message,true); } };
+$("localSender").onclick=()=>localPipe("sender");
+$("localReceiver").onclick=()=>localPipe("receiver");
+$("localStop").onclick=async()=>{ await api("/api/pipeline/stop",{});
+  setStatus("local pipeline stopped."); };
+async function localPipe(kind){
+  try{ const r=await api("/api/pipeline/start",Object.assign(payload(),{kind}));
+    setStatus("local "+kind+" running");
+    $("lastCmd").style.display="block"; $("lastCmd").textContent=r.cmd||"";
+  }catch(e){ setStatus(e.message,true); } }
+$("applyPreset").onclick=applyPreset;
+$("transport").onchange=renderTransport;
+
+/* ---------------- charts ---------------- */
+const N = 180; // 3-minute window
+function TimeChart(canvas, series, opt={}){
+  const ctx=canvas.getContext("2d");
+  const data={}; series.forEach(s=>data[s.key]=[]);
+  function push(sample){ series.forEach(s=>{
+    const v=sample[s.key];
+    data[s.key].push(typeof v==="number"&&isFinite(v)?v:null);
+    if(data[s.key].length>N) data[s.key].shift(); }); }
+  function draw(){
+    const dpr=devicePixelRatio||1;
+    const w=canvas.width=canvas.clientWidth*dpr,
+          h=canvas.height=canvas.clientHeight*dpr;
+    if(!w||!h) return;
+    ctx.clearRect(0,0,w,h);
+    let lo=opt.min, hi=opt.max;
+    if(lo==null||hi==null){
+      lo=Infinity; hi=-Infinity;
+      series.forEach(s=>data[s.key].forEach(v=>{ if(v!=null){
+        lo=Math.min(lo,v); hi=Math.max(hi,v); } }));
+      if(lo===Infinity){ lo=0; hi=1; }
+      if(hi-lo<1e-9) hi=lo+1;
+      const pad=(hi-lo)*0.12; lo-=pad; hi+=pad;
+    }
+    const X=i=>i/(N-1)*w, Y=v=>h-(v-lo)/(hi-lo)*h;
+    // threshold bands
+    (opt.bands||[]).forEach(b=>{
+      const y1=Y(Math.min(b.to,hi)), y2=Y(Math.max(b.from,lo));
+      ctx.fillStyle=b.color; ctx.fillRect(0,y1,w,Math.max(y2-y1,0)); });
+    // gridline labels
+    ctx.font=(10*dpr)+"px sans-serif"; ctx.fillStyle="#7a8494";
+    ctx.fillText(fmt(hi),4*dpr,11*dpr); ctx.fillText(fmt(lo),4*dpr,h-4*dpr);
+    ctx.fillText("-3min",w-78*dpr,h-4*dpr); ctx.fillText("now",w-26*dpr,h-4*dpr);
+    series.forEach(s=>{
+      ctx.strokeStyle=s.color; ctx.lineWidth=1.7*dpr; ctx.beginPath();
+      let on=false;
+      data[s.key].forEach((v,i)=>{ if(v==null){ on=false; return; }
+        const x=X(i),y=Y(Math.max(lo,Math.min(hi,v)));
+        if(!on){ ctx.moveTo(x,y); on=true; } else ctx.lineTo(x,y); });
+      ctx.stroke(); });
+  }
+  const fmt=v=>Math.abs(v)>=100?v.toFixed(0):v.toFixed(1);
+  return {push,draw,series};
+}
+function BarChart(canvas){
+  const ctx=canvas.getContext("2d");
+  let bars=[]; // [freqMHz, dBm]
+  function set(b){ if(Array.isArray(b)&&b.length) bars=b; }
+  function draw(){
+    const dpr=devicePixelRatio||1;
+    const w=canvas.width=canvas.clientWidth*dpr,
+          h=canvas.height=canvas.clientHeight*dpr;
+    if(!w||!h||!bars.length) return;
+    ctx.clearRect(0,0,w,h);
+    const vals=bars.map(b=>b[1]);
+    const hi=Math.max(...vals)+2, lo=Math.min(...vals)-2;
+    const bw=w/bars.length;
+    const worst=Math.max(...vals);
+    bars.forEach((b,i)=>{
+      const frac=(b[1]-lo)/(hi-lo);
+      const y=h-frac*(h-18*dpr);
+      ctx.fillStyle = b[1]>=worst-0.5 ? "#ff5b5b"
+                    : (b[1]-lo)/(hi-lo)>0.6 ? "#ffb347" : "#3fcf76";
+      ctx.fillRect(i*bw+2*dpr, y, bw-4*dpr, h-14*dpr-y);
+      ctx.fillStyle="#7a8494"; ctx.font=(9*dpr)+"px sans-serif";
+      if(i%2===0) ctx.fillText(b[0], i*bw+2*dpr, h-3*dpr);
+    });
+    ctx.fillStyle="#7a8494"; ctx.font=(10*dpr)+"px sans-serif";
+    ctx.fillText(hi.toFixed(0)+" dBm",4*dpr,11*dpr);
+  }
+  return {set,draw};
+}
+function legend(elId, series){
+  $(elId).innerHTML = series.map(s=>
+    `<span style="color:${s.color}">● ${s.label}</span>`).join(" ");
+}
+const BAND_OK="rgba(63,207,118,.07)", BAND_WARN="rgba(255,179,71,.07)",
+      BAND_BAD="rgba(255,91,91,.08)";
+const chDeliv = TimeChart($("chDeliv"),
+  [{key:"delivery",label:"delivery %",color:"#3fcf76"}],
+  {min:0,max:110,bands:[{from:0,to:60,color:BAND_BAD},
+    {from:60,to:90,color:BAND_WARN},{from:90,to:110,color:BAND_OK}]});
+const chSnr = TimeChart($("chSnr"),
+  [{key:"snr_out",label:"self→peer",color:"#4da3ff"},
+   {key:"snr_in",label:"peer→self",color:"#3fcf76"}],
+  {min:-5,max:40,bands:[{from:-5,to:8,color:BAND_BAD},
+    {from:8,to:15,color:BAND_WARN},{from:15,to:40,color:BAND_OK}]});
+const chLoss = TimeChart($("chLoss"),
+  [{key:"arq_d",label:"ARQ retx",color:"#ffb347"},
+   {key:"rx_lost_d",label:"rx lost",color:"#ff5b5b"},
+   {key:"drop_d",label:"frames dropped",color:"#b58cff"}]);
+const chNoise = BarChart($("chNoise"));
+legend("legDeliv", chDeliv.series); legend("legSnr", chSnr.series);
+legend("legLoss", chLoss.series);
+$("legNoise").innerHTML='<span style="color:#ff5b5b">● worst channel</span>';
+
+/* ---------------- live metric derivation ---------------- */
+let prevRendered=null, lastFrameTs=null, prevDropped=null;
+function fpsSrc(s){
+  const p=(s.pipeline&&s.pipeline.fps&&s.pipeline.fps.current!=null)
+    ? s.pipeline.fps
+    : ((s.peer&&s.peer.pipeline&&s.peer.pipeline.fps)||{});
+  return p;
+}
+function targetFps(){ return (RUN&&RUN.target_fps)||state.video.fps||30; }
+function tile(id, value, cls, sub){
+  const t=$(id); t.className="tile "+(cls||"");
+  t.querySelector(".v").textContent=value;
+  if(sub!==undefined) t.querySelector(".s").textContent=sub;
+}
+function grade(v, okAt, warnAt, invert){
+  if(v==null) return "";
+  if(invert) return v<=okAt?"ok":(v<=warnAt?"warn":"bad");
+  return v>=okAt?"ok":(v>=warnAt?"warn":"bad");
+}
+function onSample(s){
+  const r=s.radio||{}, peer=s.peer||{};
+  const f=fpsSrc(s);
+  // freeze tracking via rendered counter
+  const now=Date.now()/1000;
+  if(f.rendered!=null){
+    if(prevRendered===null||f.rendered>prevRendered) lastFrameTs=now;
+    prevRendered=f.rendered;
+  }
+  const freeze = lastFrameTs ? Math.max(0, now-lastFrameTs) : null;
+  const tgt=targetFps();
+  const delivery = (f.current!=null&&tgt)
+    ? Math.min(f.current/tgt*100,110) : null;
+  let drop_d=null;
+  if(f.dropped!=null){ drop_d=prevDropped==null?0:Math.max(0,f.dropped-prevDropped);
+    prevDropped=f.dropped; }
+  const snrWorst=(r.snr_out!=null&&r.snr_in!=null)
+    ? Math.min(r.snr_out,r.snr_in) : (r.snr_out ?? r.snr_in);
+  const util=r.resource_ratio!=null ? r.resource_ratio*100 : null;
+  const feed=Math.max(r.radio_eth_kbps||0,
+    (peer.radio&&peer.radio.radio_eth_kbps)||0)||r.radio_eth_kbps;
+  const ovf=r.tx_overflow ?? null;
+
+  tile("tDeliv", delivery==null?"—":delivery.toFixed(0)+"%",
+       grade(delivery,90,60), "of "+tgt+" fps target");
+  tile("tFreeze", freeze==null?"—":freeze.toFixed(1)+"s",
+       grade(freeze,1,3,true));
+  tile("tSnr", snrWorst==null?"—":snrWorst+" dB", grade(snrWorst,15,8),
+       (r.snr_out!=null?("out "+r.snr_out):"")+(r.snr_in!=null?(" / in "+r.snr_in):""));
+  tile("tUtil", util==null?"—":util.toFixed(0)+"%", grade(util,60,80,true));
+  tile("tFeed", feed?feed.toFixed(0):"—",
+       "", "kbps · target "+(state.video.bitrate_kbps||"?"));
+  tile("tOvf", ovf==null?"—":(ovf>0?ovf:"OK"), ovf>0?"bad":"ok",
+       ovf>0?"FEED TOO BIG FOR PIPE":"feed > pipe alarm");
+
+  const cs={delivery, snr_out:r.snr_out, snr_in:r.snr_in,
+            arq_d:r.arq_d, rx_lost_d:r.rx_lost_d, drop_d};
+  chDeliv.push(cs); chSnr.push(cs); chLoss.push(cs);
+  chDeliv.draw(); chSnr.draw(); chLoss.draw();
+  if(r.noise&&r.noise.length){ chNoise.set(r.noise); chNoise.draw(); }
+}
+
+/* ---------------- scoreboard ---------------- */
+function cls(v, okAt, warnAt, invert){
+  if(v==null) return "";
+  if(invert) return v<=okAt?"good":(v<=warnAt?"mid":"poor");
+  return v>=okAt?"good":(v>=warnAt?"mid":"poor");
+}
+function paramsBrief(p){
+  const v=p.video||{}, s=p.sender||{};
+  const bits=[];
+  if(v.bitrate_kbps) bits.push(v.bitrate_kbps+"k");
+  if(v.resolution) bits.push(v.resolution);
+  if(s.fec_percentage!=null) bits.push("FEC"+s.fec_percentage+"%");
+  if(s.latency_ms!=null) bits.push(s.latency_ms+"ms");
+  return bits.join(" · ");
+}
+async function pollRuns(){
+  try{
+    const runs=await api("/api/runs");
+    const rows=runs.map(r=>{
+      const m=r.summary||{};
+      const td=(v,c,suf="")=>`<td class="${c||""}">${v==null?"—":v+suf}</td>`;
+      return `<tr><td>${r.id}</td><td class="l">${r.transport||""}</td>
+        <td class="l">${paramsBrief(r.params||{})}</td>
+        <td class="l">${(r.direction||"").replace("self->peer","→").replace("peer->self","←")}</td>
+        ${td(m.seconds,null,"s")}
+        ${td(m.delivery_avg, cls(m.delivery_avg,90,60),"%")}
+        ${td(m.delivery_min, cls(m.delivery_min,90,60),"%")}
+        ${td(m.freeze_pct, cls(m.freeze_pct,2,10,true),"%")}
+        ${td(m.snr_avg,null)} ${td(m.snr_min,null)}
+        ${td(m.arq_total,null)}
+        ${td(m.tx_overflow, m.tx_overflow>0?"poor":"good")}
+        <td><a href="/api/export?run=${r.id}">csv</a></td></tr>`;
+    }).join("");
+    $("runsTable").innerHTML =
+      `<tr><th>#</th><th class="l">transport</th><th class="l">settings</th>
+       <th class="l">dir</th><th>len</th><th>deliv avg</th><th>deliv min</th>
+       <th>freeze</th><th>snr avg</th><th>snr min</th><th>arq</th>
+       <th>ovf</th><th></th></tr>` + rows;
+  }catch(e){}
+}
+
+/* ---------------- polling ---------------- */
+async function pollState(){
+  try{
+    const st=await api("/api/state");
+    $("dotRadio").className="dot"+(st.radio_ok?" on":"");
+    $("dotPeer").className="dot"+(st.peer_ok?" on":"");
+    $("peerName").textContent=st.peer_name?("("+st.peer_name+")"):"";
+    const p=st.pipeline;
+    $("dotPipe").className="dot"+(p.running?" on":"");
+    RUN=st.run;
+    $("runBadge").textContent=st.run
+      ? `RUN #${st.run.id} ${st.run.direction} [${st.run.transport}]`:"";
+    $("runClock").textContent=st.run
+      ? Math.floor((Date.now()/1000-st.run.started))+"s":"";
+    if(p.error) setStatus("pipeline: "+p.error,true);
+    if(p.meta&&p.meta.cmd){ $("lastCmd").style.display="block";
+      $("lastCmd").textContent=p.meta.cmd; }
+  }catch(e){}
+}
+async function pollStats(){
+  try{ const last=await api("/api/stats/latest");
+    if(last&&last.ts) onSample(last);
+  }catch(e){}
+}
+
+/* ---------------- init ---------------- */
+(async function init(){
+  INFO=await api("/api/info"); SCHEMA=INFO.schema;
+  $("whoami").textContent=`${INFO.name} (${INFO.platform})`;
+  const dir=$("direction");
+  [["self->peer",`${INFO.name} → peer (this side sends)`],
+   ["peer->self",`peer → ${INFO.name} (this side receives)`]]
+    .forEach(([v,l])=>{ const o=document.createElement("option");
+      o.value=v; o.textContent=l; dir.appendChild(o); });
+  const tsel=$("transport");
+  Object.entries(SCHEMA.transports).forEach(([k,t])=>{
+    const o=document.createElement("option"); o.value=k;
+    o.textContent=t.label; tsel.appendChild(o); });
+  Object.keys(SCHEMA.presets).forEach(k=>{
+    const o=document.createElement("option"); o.value=k; o.textContent=k;
+    $("preset").appendChild(o); });
+  renderGroup("videoParams","video",SCHEMA.video);
+  renderTransport();
+  setInterval(pollState,1500); setInterval(pollStats,1000);
+  setInterval(pollRuns,5000);
+  pollState(); pollStats(); pollRuns();
+  addEventListener("resize",()=>{ chDeliv.draw(); chSnr.draw();
+    chLoss.draw(); chNoise.draw(); });
+})();
+</script>
+</body>
+</html>
